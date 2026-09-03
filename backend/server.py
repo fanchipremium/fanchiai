@@ -3,7 +3,10 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import base64
+import asyncio
 import logging
+import requests
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
@@ -21,7 +24,8 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
-GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview"
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')  # user's own Google Gemini key (server-side only)
+GEMINI_IMAGE_MODEL = os.environ.get('GEMINI_IMAGE_MODEL', 'gemini-3.1-flash-image')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -81,9 +85,37 @@ async def get_catalog():
     return {"products": FANCHI_CATALOG}
 
 
+def _gemini_direct(prompt: str, img_b64: str):
+    """Call Google Gemini image API directly with the user's own key (server-side)."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_IMAGE_MODEL}:generateContent"
+    body = {
+        "contents": [{"parts": [
+            {"text": prompt},
+            {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}},
+        ]}],
+        "generationConfig": {"responseModalities": ["IMAGE"]},
+    }
+    r = requests.post(
+        url,
+        headers={"Content-Type": "application/json", "X-goog-api-key": GEMINI_API_KEY},
+        json=body,
+        timeout=180,
+    )
+    if r.status_code != 200:
+        raise RuntimeError(f"{r.status_code} {r.text[:300]}")
+    d = r.json()
+    parts = d.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+    for p in parts:
+        inl = p.get("inlineData") or p.get("inline_data")
+        if inl and inl.get("data"):
+            mime = inl.get("mimeType") or inl.get("mime_type") or "image/png"
+            return mime, inl["data"]
+    return None, None
+
+
 @api_router.post("/generate-wrap")
 async def generate_wrap(req: GenerateWrapRequest):
-    if not EMERGENT_LLM_KEY:
+    if not GEMINI_API_KEY and not EMERGENT_LLM_KEY:
         raise HTTPException(status_code=500, detail={"code": "config", "message": "AI engine is not configured."})
 
     img_b64 = req.image_base64
@@ -93,26 +125,31 @@ async def generate_wrap(req: GenerateWrapRequest):
     prompt = build_prompt(req.product)
 
     try:
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"fanchi-{uuid.uuid4()}",
-            system_message="You are a professional automotive vinyl wrap visualizer.",
-        )
-        chat.with_model("gemini", GEMINI_IMAGE_MODEL).with_params(modalities=["image", "text"])
+        if GEMINI_API_KEY:
+            mime, data = await asyncio.to_thread(_gemini_direct, prompt, img_b64)
+        else:
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"fanchi-{uuid.uuid4()}",
+                system_message="You are a professional automotive vinyl wrap visualizer.",
+            )
+            chat.with_model("gemini", GEMINI_IMAGE_MODEL).with_params(modalities=["image", "text"])
+            msg = UserMessage(text=prompt, file_contents=[ImageContent(img_b64)])
+            _text, images = await chat.send_message_multimodal_response(msg)
+            if images:
+                mime, data = images[0]["mime_type"], images[0]["data"]
+            else:
+                mime, data = None, None
 
-        msg = UserMessage(text=prompt, file_contents=[ImageContent(img_b64)])
-        text, images = await chat.send_message_multimodal_response(msg)
-
-        if not images:
-            logger.warning("Gemini returned no image. Text: %s", (text or "")[:120])
+        if not data:
+            logger.warning("Gemini returned no image.")
             raise HTTPException(
                 status_code=502,
                 detail={"code": "no_image", "message": "Unable to generate your FANCHI wrap visual right now. Please try again."},
             )
 
-        out = images[0]
         return {
-            "image": f"data:{out['mime_type']};base64,{out['data']}",
+            "image": f"data:{mime};base64,{data}",
             "product": req.product.model_dump(),
         }
 
