@@ -1,0 +1,228 @@
+{
+  "project_title": "FANCHI Car Wrap AI Visualizer Web App",
+  "persona": "E1 - Anti-AI Automotive Studio Designer",
+  "theme": "Automotive Dark Studio & High-Performance Vinyl Workshop",
+  "design_archetype": "THE PERFORMANCE PRO (Elite Automotive Engineering & Tactical Visuals)",
+  "typography": {
+    "heading_font": "Barlow Condensed, Syne, Sans-Serif",
+    "body_font": "Inter, System-UI, Sans-Serif",
+    "mono_font": "JetBrains Mono, Monospace",
+    "logo_style": {
+      "font_family": "Barlow Condensed, sans-serif",
+      "font_weight": "900",
+      "letter_spacing": "0.25em",
+      "text": "FANCHI",
+      "subtitle": "AI WRAP STUDIO",
+      "classes": "text-2xl sm:text-3xl font-black tracking-[0.25em] text-white uppercase italic"
+    },
+    "hierarchy": {
+      "h1_hero": "text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-wider leading-none",
+      "h2_section": "text-xl sm:text-2xl lg:text-3xl font-bold uppercase tracking-wide",
+      "h3_card": "text-lg sm:text-xl font-semibold tracking-normal",
+      "body": "text-sm sm:text-base font-normal text-slate-300 leading-relaxed",
+      "caption_badge": "text-xs font-mono uppercase tracking-widest text-slate-400"
+    }
+  },
+  "colors": {
+    "background_base": "#0B0C10",
+    "background_surface": "#12141C",
+    "background_elevated": "#1A1D28",
+    "border_subtle": "#262A3B",
+    "border_highlight": "#3E445E",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#94A3B8",
+    "text_muted": "#64748B",
+    "accent_primary": "#FF3333",
+    "accent_cyan": "#00F0FF",
+    "accent_gold": "#FFC700",
+    "accent_emerald": "#10B981",
+    "finish_gradients": {
+      "candy": "linear-gradient(135deg, #FF0055 0%, #7A00FF 100%)",
+      "color_shift": "linear-gradient(135deg, #00F0FF 0%, #FF00AA 50%, #FFD700 100%)",
+      "liquid_metal": "linear-gradient(135deg, #E2E8F0 0%, #475569 50%, #94A3B8 100%)",
+      "matte": "linear-gradient(135deg, #1E293B 0%, #0F172A 100%)",
+      "mirror_chrome": "linear-gradient(135deg, #FFFFFF 0%, #94A3B8 25%, #FFFFFF 50%, #334155 75%, #CBD5E1 100%)",
+      "satin_metallic": "linear-gradient(135deg, #059669 0%, #10B981 50%, #064E3B 100%)"
+    }
+  },
+  "fanchi_catalog": {
+    "materials": ["PET", "TPU (PPF)", "PVC High Flexible"],
+    "finishes": ["Candy", "Color Shift / Magic Candy Flip", "Matte Chrome", "Liquid Metal", "Satin Metallic", "Super Glossy", "Mirror Chrome", "Ultra Matte"],
+    "sample_products": [
+      {
+        "id": "FC-8139",
+        "name": "Magic Candy Flip Grey Green",
+        "color_name": "Grey Green Chameleon",
+        "color_code": "FC-8139",
+        "material": "PET",
+        "finish": "Color Shift / Magic Candy Flip",
+        "hex_primary": "#4A6B6C",
+        "hex_secondary": "#88A795",
+        "swatch_type": "gradient",
+        "gradient_css": "linear-gradient(135deg, #2D3748 0%, #4A6B6C 50%, #88A795 100%)",
+        "badge": "BESTSELLER"
+      },
+      {
+        "id": "FC-201",
+        "name": "Liquid Metal Sterling Silver",
+        "color_name": "Sterling Silver",
+        "color_code": "FC-201",
+        "material": "TPU (PPF)",
+        "finish": "Liquid Metal",
+        "hex_primary": "#CBD5E1",
+        "hex_secondary": "#64748B",
+        "swatch_type": "metallic",
+        "gradient_css": "linear-gradient(135deg, #F8FAFC 0%, #94A3B8 50%, #334155 100%)",
+        "badge": "TPU PPF"
+      },
+      {
+        "id": "FC-612",
+        "name": "Glossy Metallic Candy Apple Red",
+        "color_name": "Candy Apple Red",
+        "color_code": "FC-612",
+        "material": "PET",
+        "finish": "Candy",
+        "hex_primary": "#DC2626",
+        "hex_secondary": "#991B1B",
+        "swatch_type": "gloss",
+        "gradient_css": "linear-gradient(135deg, #FF1A1A 0%, #B91C1C 60%, #450A0A 100%)",
+        "badge": "HIGH GLOSS"
+      },
+      {
+        "id": "FC-305",
+        "name": "Satin Metallic Emerald Green",
+        "color_name": "Emerald Green",
+        "color_code": "FC-305",
+        "material": "PET",
+        "finish": "Satin Metallic",
+        "hex_primary": "#059669",
+        "hex_secondary": "#064E3B",
+        "swatch_type": "satin",
+        "gradient_css": "linear-gradient(135deg, #10B981 0%, #047857 50%, #064E3B 100%)",
+        "badge": "PREMIUM"
+      },
+      {
+        "id": "FC-402",
+        "name": "Ultra Matte Stealth Black",
+        "color_name": "Stealth Matte Black",
+        "color_code": "FC-402",
+        "material": "PVC High Flexible",
+        "finish": "Ultra Matte",
+        "hex_primary": "#18181B",
+        "hex_secondary": "#09090B",
+        "swatch_type": "matte",
+        "gradient_css": "linear-gradient(135deg, #27272A 0%, #18181B 50%, #09090B 100%)",
+        "badge": "STEALTH"
+      },
+      {
+        "id": "FC-509",
+        "name": "Mirror Chrome Gold",
+        "color_name": "Royale Gold Chrome",
+        "color_code": "FC-509",
+        "material": "PET",
+        "finish": "Mirror Chrome",
+        "hex_primary": "#EAB308",
+        "hex_secondary": "#A16207",
+        "swatch_type": "chrome",
+        "gradient_css": "linear-gradient(135deg, #FEF08A 0%, #EAB308 50%, #854D0E 100%)",
+        "badge": "SPECIAL EDITION"
+      },
+      {
+        "id": "FC-708",
+        "name": "Magic Sunset Cyan-Purple Shift",
+        "color_name": "Cyan Purple Flip",
+        "color_code": "FC-708",
+        "material": "TPU (PPF)",
+        "finish": "Color Shift / Magic Candy Flip",
+        "hex_primary": "#06B6D4",
+        "hex_secondary": "#9333EA",
+        "swatch_type": "gradient",
+        "gradient_css": "linear-gradient(135deg, #00F0FF 0%, #8B5CF6 50%, #EC4899 100%)",
+        "badge": "TPU PPF"
+      },
+      {
+        "id": "FC-110",
+        "name": "Super Gloss Nardo Grey",
+        "color_name": "Nardo Grey",
+        "color_code": "FC-110",
+        "material": "PET",
+        "finish": "Super Glossy",
+        "hex_primary": "#64748B",
+        "hex_secondary": "#334155",
+        "swatch_type": "gloss",
+        "gradient_css": "linear-gradient(135deg, #94A3B8 0%, #64748B 60%, #334155 100%)",
+        "badge": "POPULAR"
+      }
+    ]
+  },
+  "layout_structure": {
+    "header": {
+      "type": "Fixed glassmorphism topbar",
+      "components": ["Text Logo 'FANCHI' with italic AI Wrap badge", "Gemini AI Engine indicator badge", "Catalog Quick Filter", "Reset Studio Button"]
+    },
+    "main_container": {
+      "type": "2-Column Studio Layout on Desktop (Upload/Catalog Left, Interactive Before/After Visualizer Right)",
+      "left_panel": {
+        "step_1": "Car Photo Drag & Drop Upload Zone + Photo Consent Checkbox",
+        "step_2": "FANCHI Vinyl Product Selector (Filter Tabs by Material/Finish, Search Bar, Visual Swatches Grid)",
+        "step_3": "GENERATE VISUAL CTA Button (with laser scan motion on loading state)"
+      },
+      "right_panel": {
+        "result_container": "Interactive Before/After Slider + Side-by-Side Toggle View",
+        "actions": ["TRY ANOTHER COLOR Button (re-uses uploaded photo)", "DOWNLOAD HIGH-RES VISUAL Button", "SHARE WRAP LOOK Button"],
+        "wrap_info_card": "Summary of active FANCHI material, finish, color code & estimated roll spec (1.52m x 16.5m)"
+      }
+    },
+    "error_states": [
+      {
+        "type": "General API Failure",
+        "message": "Unable to generate your FANCHI wrap visual right now. Please try again.",
+        "button_text": "TRY AGAIN",
+        "data_testid": "error-general-try-again-button"
+      },
+      {
+        "type": "Server Overload",
+        "message": "FANCHI AI is currently busy. Please try again in a moment.",
+        "button_text": "RETRY NOW",
+        "data_testid": "error-busy-retry-button"
+      }
+    ]
+  },
+  "image_urls": {
+    "hero_background": "https://images.unsplash.com/photo-1595558884516-0a2eb78964e1?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "sample_car_original": "https://images.unsplash.com/photo-1561646114-780004e1fe33?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "sample_car_wrapped_demo": "https://images.unsplash.com/photo-1595558848762-e5ab72171957?crop=entropy&cs=srgb&fm=jpg&q=85"
+  },
+  "interactive_elements": {
+    "data_testids": {
+      "header_logo": "fanchi-text-logo",
+      "upload_dropzone": "car-photo-upload-dropzone",
+      "upload_file_input": "car-photo-file-input",
+      "consent_checkbox": "photo-consent-checkbox",
+      "catalog_search": "fanchi-catalog-search-input",
+      "catalog_filter_material": "fanchi-material-filter-tabs",
+      "catalog_filter_finish": "fanchi-finish-filter-tabs",
+      "product_card": "fanchi-product-card-",
+      "generate_button": "generate-visual-button",
+      "before_after_slider": "wrap-before-after-slider",
+      "toggle_side_by_side": "view-mode-side-by-side-button",
+      "toggle_slider": "view-mode-slider-button",
+      "try_another_color_button": "try-another-color-button",
+      "download_result_button": "download-wrap-result-button",
+      "error_general_box": "error-state-general-container",
+      "error_busy_box": "error-state-busy-container"
+    }
+  },
+  "instructions_to_main_agent": [
+    "No login requirement as instructed by user choice.",
+    "Use text logo 'FANCHI' in high-impact italic Barlow Condensed or heavy sans typography.",
+    "Implement photo upload drag & drop with preview thumbnail, remove button, and consent checkbox (must be checked to enable 'GENERATE VISUAL').",
+    "Implement the full FANCHI catalog experience with swatch gradients, finish badges (Candy, Color Shift, PET, TPU), material filter tabs, and color codes.",
+    "Integrate calls to backend /api/generate-wrap endpoint sending car photo and product metadata, with fallback handling for Gemini API failures.",
+    "Support both error states exactly as defined: 'Unable to generate your FANCHI wrap visual right now. Please try again.' and 'FANCHI AI is currently busy. Please try again in a moment.'",
+    "Ensure 'TRY ANOTHER COLOR' keeps the currently uploaded photo intact and lets the user pick a new FANCHI product immediately.",
+    "Provide interactive Before/After image comparison slider and side-by-side toggle view.",
+    "Include high quality mock visual fallback generation if backend Gemini key is missing so user can thoroughly test visualizer flow.",
+    "Attach data-testid to every interactive component (buttons, inputs, checkboxes, sliders, cards)."
+  ]
+}
