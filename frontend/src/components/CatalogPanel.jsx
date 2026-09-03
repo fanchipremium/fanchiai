@@ -58,7 +58,13 @@ export default function CatalogPanel({ products, selected, onSelect }) {
                 isSel ? "border-[var(--accent)] ring-1 ring-[var(--accent)]" : "border-[var(--border-subtle)] hover:border-[var(--border-highlight)]"
               } bg-[var(--bg-surface)]`}
             >
-              <div className="h-16 w-full" style={{ background: p.gradient_css }} />
+              <div className="h-20 w-full overflow-hidden bg-[var(--bg-elevated)]">
+                {p.swatch_image ? (
+                  <img src={p.swatch_image} alt={p.name} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                ) : (
+                  <div className="h-full w-full" style={{ background: p.gradient_css }} />
+                )}
+              </div>
               {isSel && (
                 <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)]">
                   <Check size={12} />
@@ -66,7 +72,7 @@ export default function CatalogPanel({ products, selected, onSelect }) {
               )}
               <div className="p-2.5">
                 <p className="truncate text-xs font-semibold text-white" title={p.name}>{p.name}</p>
-                <p className="mt-0.5 font-mono text-[9px] uppercase tracking-wider text-slate-500">{p.color_code} · {p.material}</p>
+                <p className="mt-0.5 font-mono text-[9px] uppercase tracking-wider text-slate-500">{p.color_code ? `${p.color_code} · ` : ""}{p.material}</p>
                 <span className="mt-1.5 inline-block rounded-full bg-[var(--bg-elevated)] px-2 py-0.5 font-mono text-[8px] uppercase tracking-widest text-[var(--accent-cyan)]">
                   {p.finish}
                 </span>

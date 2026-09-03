@@ -1,6 +1,11 @@
-"""FANCHI product catalog (sourced from fanchi.id product families)."""
+"""FANCHI product catalog (imported from fanchi.id/katalog-produk)."""
+import json
+from pathlib import Path
 
-FANCHI_CATALOG = [
+_DATA_FILE = Path(__file__).parent / "catalog_data.json"
+
+# Demo fallback (used only if the imported catalog file is missing)
+_DEMO_CATALOG = [
     {
         "id": "FC-8139",
         "name": "Magic Candy Flip Grey Green",
@@ -146,6 +151,21 @@ FANCHI_CATALOG = [
         "badge": "PLATINUM",
     },
 ]
+
+
+def _load_catalog():
+    if _DATA_FILE.exists():
+        try:
+            data = json.loads(_DATA_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, list) and data:
+                return data
+        except Exception:
+            pass
+    return _DEMO_CATALOG
+
+
+FANCHI_CATALOG = _load_catalog()
+
 
 # Finish interpretation for the Gemini prompt builder
 FINISH_INTERPRETATION = {

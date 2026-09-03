@@ -49,10 +49,16 @@ export default function ResultPanel({ status, original, result, product, error, 
 
           {product && (
             <div className="flex items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-base)] p-3">
-              <div className="h-10 w-10 shrink-0 rounded-lg" style={{ background: product.gradient_css }} />
+              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-[var(--bg-elevated)]">
+                {product.swatch_image ? (
+                  <img src={product.swatch_image} alt={product.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="h-full w-full" style={{ background: product.gradient_css }} />
+                )}
+              </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-white">{product.name}</p>
-                <p className="font-mono text-[10px] uppercase tracking-widest text-slate-400">{product.color_code} · {product.material} · {product.finish}</p>
+                <p className="font-mono text-[10px] uppercase tracking-widest text-slate-400">{product.color_code ? `${product.color_code} · ` : ""}{product.material} · {product.finish}</p>
               </div>
             </div>
           )}

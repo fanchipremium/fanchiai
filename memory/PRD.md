@@ -27,6 +27,7 @@ Build a web app where a user uploads a photo of their car, gives photo consent, 
 - Frontend renders; upload/consent/select gating works; error state renders exact message.
 
 ## Known Issues / Notes
+- Catalog imported LIVE from fanchi.id/katalog-produk: 454 real products across 29 series with real product/swatch photos, color codes, material (PET/TPU/PVC) and finish. Stored in /app/backend/catalog_data.json (loaded by catalog.py; demo list kept only as fallback).
 - Emergent Universal Key balance was exhausted during automated testing (max budget 0.4 reached). Generation will return the "busy" error until balance is topped up (Profile → Manage plan → Universal Key → Add Balance).
 - Catalog is static demo data (fanchi.id was not reachable to import real catalog).
 
