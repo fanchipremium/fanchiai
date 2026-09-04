@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 from catalog import FANCHI_CATALOG, FINISH_INTERPRETATION
+import fanchi_sync
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -26,6 +27,9 @@ db = client[os.environ['DB_NAME']]
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')  # user's own Google Gemini key (server-side only)
 GEMINI_IMAGE_MODEL = os.environ.get('GEMINI_IMAGE_MODEL', 'gemini-3.1-flash-image')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')  # user's own OpenAI key (server-side only)
+OPENAI_IMAGE_MODEL = os.environ.get('OPENAI_IMAGE_MODEL', 'gpt-image-1')
+AI_ENGINE = os.environ.get('AI_ENGINE', 'openai').lower()  # openai | gemini | emergent
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -85,6 +89,25 @@ async def get_catalog():
     return {"products": FANCHI_CATALOG}
 
 
+def _openai_edit(prompt: str, img_bytes: bytes):
+    """Call OpenAI gpt-image-1 image edit with the user's own key (server-side)."""
+    r = requests.post(
+        "https://api.openai.com/v1/images/edits",
+        headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+        data={"model": OPENAI_IMAGE_MODEL, "size": "1024x1024", "n": "1"},
+        files={"image": ("car.png", img_bytes, "image/png"), "prompt": (None, prompt)},
+        timeout=180,
+    )
+    if r.status_code != 200:
+        raise RuntimeError(f"{r.status_code} {r.text[:300]}")
+    d = r.json()
+    item = (d.get("data") or [{}])[0]
+    b64 = item.get("b64_json")
+    if b64:
+        return "image/png", b64
+    return None, None
+
+
 def _gemini_direct(prompt: str, img_b64: str):
     """Call Google Gemini image API directly with the user's own key (server-side)."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_IMAGE_MODEL}:generateContent"
@@ -113,9 +136,29 @@ def _gemini_direct(prompt: str, img_b64: str):
     return None, None
 
 
+@api_router.get("/catalog/meta")
+async def catalog_meta():
+    return fanchi_sync.get_meta()
+
+
+@api_router.post("/catalog/sync")
+async def catalog_sync():
+    try:
+        meta = await asyncio.to_thread(fanchi_sync.sync_catalog)
+    except Exception as e:
+        logger.error("Catalog sync failed: %s", str(e)[:200])
+        raise HTTPException(status_code=502, detail={"code": "sync_failed", "message": "Gagal sinkron katalog FANCHI. Coba lagi."})
+    # reload in-memory catalog
+    import catalog as _cat
+    _cat.FANCHI_CATALOG = _cat._load_catalog()
+    global FANCHI_CATALOG
+    FANCHI_CATALOG = _cat.FANCHI_CATALOG
+    return meta
+
+
 @api_router.post("/generate-wrap")
 async def generate_wrap(req: GenerateWrapRequest):
-    if not GEMINI_API_KEY and not EMERGENT_LLM_KEY:
+    if not (OPENAI_API_KEY or GEMINI_API_KEY or EMERGENT_LLM_KEY):
         raise HTTPException(status_code=500, detail={"code": "config", "message": "AI engine is not configured."})
 
     img_b64 = req.image_base64
@@ -124,8 +167,18 @@ async def generate_wrap(req: GenerateWrapRequest):
 
     prompt = build_prompt(req.product)
 
+    # Engine priority: explicit AI_ENGINE, else first available key.
+    engine = AI_ENGINE
+    if engine == "openai" and not OPENAI_API_KEY:
+        engine = "gemini" if GEMINI_API_KEY else "emergent"
+    if engine == "gemini" and not GEMINI_API_KEY:
+        engine = "openai" if OPENAI_API_KEY else "emergent"
+
     try:
-        if GEMINI_API_KEY:
+        if engine == "openai":
+            img_bytes = base64.b64decode(img_b64)
+            mime, data = await asyncio.to_thread(_openai_edit, prompt, img_bytes)
+        elif engine == "gemini":
             mime, data = await asyncio.to_thread(_gemini_direct, prompt, img_b64)
         else:
             chat = LlmChat(
@@ -133,7 +186,7 @@ async def generate_wrap(req: GenerateWrapRequest):
                 session_id=f"fanchi-{uuid.uuid4()}",
                 system_message="You are a professional automotive vinyl wrap visualizer.",
             )
-            chat.with_model("gemini", GEMINI_IMAGE_MODEL).with_params(modalities=["image", "text"])
+            chat.with_model("gemini", "gemini-3.1-flash-image-preview").with_params(modalities=["image", "text"])
             msg = UserMessage(text=prompt, file_contents=[ImageContent(img_b64)])
             _text, images = await chat.send_message_multimodal_response(msg)
             if images:
@@ -142,7 +195,7 @@ async def generate_wrap(req: GenerateWrapRequest):
                 mime, data = None, None
 
         if not data:
-            logger.warning("Gemini returned no image.")
+            logger.warning("AI engine returned no image (engine=%s).", engine)
             raise HTTPException(
                 status_code=502,
                 detail={"code": "no_image", "message": "Unable to generate your FANCHI wrap visual right now. Please try again."},
@@ -157,8 +210,8 @@ async def generate_wrap(req: GenerateWrapRequest):
         raise
     except Exception as e:
         emsg = str(e).lower()
-        logger.error("Gemini generation error: %s", str(e)[:300])
-        if any(k in emsg for k in ["429", "rate", "overload", "quota", "unavailable", "503", "busy", "capacity"]):
+        logger.error("Generation error (engine=%s): %s", engine, str(e)[:300])
+        if any(k in emsg for k in ["429", "rate", "overload", "quota", "unavailable", "503", "busy", "capacity", "no credits", "billing"]):
             raise HTTPException(
                 status_code=503,
                 detail={"code": "busy", "message": "FANCHI AI is currently busy. Please try again in a moment."},
@@ -178,6 +231,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def _startup_catalog():
+    try:
+        fanchi_sync.ensure_meta()
+    except Exception as e:
+        logger.warning("ensure_meta failed: %s", str(e)[:120])
+
+    async def _auto_sync_loop():
+        while True:
+            await asyncio.sleep(fanchi_sync.SYNC_INTERVAL_HOURS * 3600)
+            try:
+                await asyncio.to_thread(fanchi_sync.sync_catalog)
+                import catalog as _cat
+                _cat.FANCHI_CATALOG = _cat._load_catalog()
+                global FANCHI_CATALOG
+                FANCHI_CATALOG = _cat.FANCHI_CATALOG
+                logger.info("Auto catalog sync complete.")
+            except Exception as e:
+                logger.warning("Auto sync failed: %s", str(e)[:120])
+
+    asyncio.create_task(_auto_sync_loop())
 
 
 @app.on_event("shutdown")

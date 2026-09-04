@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
 import { Search, Check } from "lucide-react";
-import { MATERIALS, FINISHES, FINISH_HINT } from "@/lib/constants";
+import { MATERIALS, FINISHES, MATERIAL_FULL, titleCase } from "@/lib/constants";
 
-export default function CatalogPanel({ products, selected, onSelect }) {
+export default function CatalogPanel({ products, seriesMeta = [], selected, onSelect }) {
   const [search, setSearch] = useState("");
   const [material, setMaterial] = useState("ALL");
   const [finish, setFinish] = useState("ALL");
+  const [series, setSeries] = useState("SEMUA");
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
@@ -13,9 +14,10 @@ export default function CatalogPanel({ products, selected, onSelect }) {
       const matchQ = !q || p.name.toLowerCase().includes(q) || p.color_code.toLowerCase().includes(q) || p.color_name.toLowerCase().includes(q);
       const matchM = material === "ALL" || p.material === material;
       const matchF = finish === "ALL" || p.finish === finish;
-      return matchQ && matchM && matchF;
+      const matchS = series === "SEMUA" || p.series === series;
+      return matchQ && matchM && matchF && matchS;
     });
-  }, [products, search, material, finish]);
+  }, [products, search, material, finish, series]);
 
   return (
     <div>
@@ -37,17 +39,35 @@ export default function CatalogPanel({ products, selected, onSelect }) {
 
       <div data-testid="fanchi-material-filter-tabs" className="mb-2 flex flex-wrap gap-1.5">
         {MATERIALS.map((m) => (
-          <FilterChip key={m} active={material === m} onClick={() => setMaterial(m)} label={m} />
+          <Chip key={m} active={material === m} onClick={() => setMaterial(m)} label={m} tone="accent" />
         ))}
       </div>
-      <div data-testid="fanchi-finish-filter-tabs" className="mb-4 flex flex-wrap gap-1.5">
+      <div data-testid="fanchi-finish-filter-tabs" className="mb-3 flex flex-wrap gap-1.5">
         {FINISHES.map((f) => (
-          <FilterChip key={f} active={finish === f} onClick={() => setFinish(f)} label={f} />
+          <Chip key={f} active={finish === f} onClick={() => setFinish(f)} label={f} tone="accent" />
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {filtered.map((p) => {
+      <div data-testid="fanchi-series-filter-tabs" className="mb-4 flex flex-wrap gap-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-2.5">
+        <Chip active={series === "SEMUA"} onClick={() => setSeries("SEMUA")} label="SEMUA" tone="cyan" />
+        {seriesMeta.map((s) => (
+          <Chip
+            key={s.name}
+            active={series === s.name}
+            onClick={() => setSeries(s.name)}
+            label={<>{s.name.toUpperCase()} <span className="opacity-60">{s.count}</span></>}
+            tone="cyan"
+          />
+        ))}
+      </div>
+
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="font-display text-lg font-bold">{series === "SEMUA" ? "Semua Kategori" : series}</h3>
+        <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500">{filtered.length} produk</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+        {filtered.slice(0, 120).map((p) => {
           const isSel = selected?.id === p.id;
           return (
             <button
@@ -58,29 +78,39 @@ export default function CatalogPanel({ products, selected, onSelect }) {
                 isSel ? "border-[var(--accent)] ring-1 ring-[var(--accent)]" : "border-[var(--border-subtle)] hover:border-[var(--border-highlight)]"
               } bg-[var(--bg-surface)]`}
             >
-              <div className="h-20 w-full overflow-hidden bg-[var(--bg-elevated)]">
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-white">
                 {p.swatch_image ? (
                   <img src={p.swatch_image} alt={p.name} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                 ) : (
                   <div className="h-full w-full" style={{ background: p.gradient_css }} />
                 )}
+                {p.color_code && (
+                  <span className="absolute left-2 top-2 rounded-md bg-black/75 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-white backdrop-blur">
+                    {p.color_code}
+                  </span>
+                )}
+                {isSel && (
+                  <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)]">
+                    <Check size={12} />
+                  </span>
+                )}
               </div>
-              {isSel && (
-                <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)]">
-                  <Check size={12} />
-                </span>
-              )}
               <div className="p-2.5">
-                <p className="truncate text-xs font-semibold text-white" title={p.name}>{p.name}</p>
-                <p className="mt-0.5 font-mono text-[9px] uppercase tracking-wider text-slate-500">{p.color_code ? `${p.color_code} · ` : ""}{p.material}</p>
-                <span className="mt-1.5 inline-block rounded-full bg-[var(--bg-elevated)] px-2 py-0.5 font-mono text-[8px] uppercase tracking-widest text-[var(--accent-cyan)]">
-                  {p.finish}
-                </span>
+                <p className="font-mono text-[8px] font-bold uppercase tracking-widest text-[var(--accent-cyan)]">{p.series}</p>
+                <p className="mt-0.5 truncate text-xs font-semibold text-white" title={p.name}>{p.name}</p>
+                <p className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-wider text-slate-500">
+                  {titleCase(p.finish)} {p.material} · {MATERIAL_FULL[p.material] || p.material}
+                </p>
               </div>
             </button>
           );
         })}
       </div>
+      {filtered.length > 120 && (
+        <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-widest text-slate-500">
+          Menampilkan 120 dari {filtered.length} · gunakan filter / pencarian untuk mempersempit
+        </p>
+      )}
       {filtered.length === 0 && (
         <p className="py-8 text-center text-sm text-slate-500">No products match your filters.</p>
       )}
@@ -88,14 +118,15 @@ export default function CatalogPanel({ products, selected, onSelect }) {
   );
 }
 
-function FilterChip({ active, onClick, label }) {
+function Chip({ active, onClick, label, tone = "accent" }) {
+  const activeCls = tone === "cyan"
+    ? "border-[var(--accent-cyan)] bg-[var(--accent-cyan)] text-black"
+    : "border-[var(--accent)] bg-[var(--accent)] text-white";
   return (
     <button
       onClick={onClick}
       className={`rounded-full border px-3 py-1 font-mono text-[10px] uppercase tracking-widest transition-colors ${
-        active
-          ? "border-[var(--accent)] bg-[var(--accent)] text-white"
-          : "border-[var(--border-subtle)] bg-[var(--bg-surface)] text-slate-400 hover:text-white"
+        active ? activeCls : "border-[var(--border-subtle)] bg-[var(--bg-surface)] text-slate-400 hover:text-white"
       }`}
     >
       {label}
