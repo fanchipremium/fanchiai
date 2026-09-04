@@ -3,17 +3,14 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
-import base64
 import asyncio
 import logging
 import requests
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
-import uuid
 from datetime import datetime, timezone
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 from catalog import FANCHI_CATALOG, FINISH_INTERPRETATION
 import fanchi_sync
 
@@ -24,12 +21,8 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')  # user's own Google Gemini key (server-side only)
-GEMINI_IMAGE_MODEL = os.environ.get('GEMINI_IMAGE_MODEL', 'gemini-3.1-flash-image')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')  # user's own OpenAI key (server-side only)
-OPENAI_IMAGE_MODEL = os.environ.get('OPENAI_IMAGE_MODEL', 'gpt-image-1')
-AI_ENGINE = os.environ.get('AI_ENGINE', 'openai').lower()  # openai | gemini | emergent
+OPENAI_IMAGE_MODEL = os.environ.get('OPENAI_IMAGE_MODEL', 'gpt-6-astra')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -79,18 +72,8 @@ Do not redesign the vehicle. Do not change the wheels. Do not change the body ki
 The final image must look like the exact same vehicle in the uploaded photograph after professional FANCHI sticker wrapping installation."""
 
 
-@api_router.get("/")
-async def root():
-    return {"message": "FANCHI AI Wrap Studio API"}
-
-
-@api_router.get("/catalog")
-async def get_catalog():
-    return {"products": FANCHI_CATALOG}
-
-
 def _openai_edit(prompt: str, img_b64: str):
-    """Edit car photo via OpenAI Responses API + image_generation tool (model from env)."""
+    """Edit car photo via OpenAI Responses API + image_generation tool."""
     body = {
         "model": OPENAI_IMAGE_MODEL,
         "input": [{
@@ -117,32 +100,14 @@ def _openai_edit(prompt: str, img_b64: str):
     return None, None
 
 
-def _gemini_direct(prompt: str, img_b64: str):
-    """Call Google Gemini image API directly with the user's own key (server-side)."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_IMAGE_MODEL}:generateContent"
-    body = {
-        "contents": [{"parts": [
-            {"text": prompt},
-            {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}},
-        ]}],
-        "generationConfig": {"responseModalities": ["IMAGE"]},
-    }
-    r = requests.post(
-        url,
-        headers={"Content-Type": "application/json", "X-goog-api-key": GEMINI_API_KEY},
-        json=body,
-        timeout=180,
-    )
-    if r.status_code != 200:
-        raise RuntimeError(f"{r.status_code} {r.text[:300]}")
-    d = r.json()
-    parts = d.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-    for p in parts:
-        inl = p.get("inlineData") or p.get("inline_data")
-        if inl and inl.get("data"):
-            mime = inl.get("mimeType") or inl.get("mime_type") or "image/png"
-            return mime, inl["data"]
-    return None, None
+@api_router.get("/")
+async def root():
+    return {"message": "FANCHI AI Wrap Studio API"}
+
+
+@api_router.get("/catalog")
+async def get_catalog():
+    return {"products": FANCHI_CATALOG}
 
 
 @api_router.get("/catalog/meta")
@@ -157,7 +122,6 @@ async def catalog_sync():
     except Exception as e:
         logger.error("Catalog sync failed: %s", str(e)[:200])
         raise HTTPException(status_code=502, detail={"code": "sync_failed", "message": "Gagal sinkron katalog FANCHI. Coba lagi."})
-    # reload in-memory catalog
     import catalog as _cat
     _cat.FANCHI_CATALOG = _cat._load_catalog()
     global FANCHI_CATALOG
@@ -167,7 +131,7 @@ async def catalog_sync():
 
 @api_router.post("/generate-wrap")
 async def generate_wrap(req: GenerateWrapRequest):
-    if not (OPENAI_API_KEY or GEMINI_API_KEY or EMERGENT_LLM_KEY):
+    if not OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail={"code": "config", "message": "AI engine is not configured."})
 
     img_b64 = req.image_base64
@@ -176,34 +140,11 @@ async def generate_wrap(req: GenerateWrapRequest):
 
     prompt = build_prompt(req.product)
 
-    # Engine priority: explicit AI_ENGINE, else first available key.
-    engine = AI_ENGINE
-    if engine == "openai" and not OPENAI_API_KEY:
-        engine = "gemini" if GEMINI_API_KEY else "emergent"
-    if engine == "gemini" and not GEMINI_API_KEY:
-        engine = "openai" if OPENAI_API_KEY else "emergent"
-
     try:
-        if engine == "openai":
-            mime, data = await asyncio.to_thread(_openai_edit, prompt, img_b64)
-        elif engine == "gemini":
-            mime, data = await asyncio.to_thread(_gemini_direct, prompt, img_b64)
-        else:
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"fanchi-{uuid.uuid4()}",
-                system_message="You are a professional automotive vinyl wrap visualizer.",
-            )
-            chat.with_model("gemini", "gemini-3.1-flash-image-preview").with_params(modalities=["image", "text"])
-            msg = UserMessage(text=prompt, file_contents=[ImageContent(img_b64)])
-            _text, images = await chat.send_message_multimodal_response(msg)
-            if images:
-                mime, data = images[0]["mime_type"], images[0]["data"]
-            else:
-                mime, data = None, None
+        mime, data = await asyncio.to_thread(_openai_edit, prompt, img_b64)
 
         if not data:
-            logger.warning("AI engine returned no image (engine=%s).", engine)
+            logger.warning("OpenAI returned no image.")
             raise HTTPException(
                 status_code=502,
                 detail={"code": "no_image", "message": "Unable to generate your FANCHI wrap visual right now. Please try again."},
@@ -218,7 +159,7 @@ async def generate_wrap(req: GenerateWrapRequest):
         raise
     except Exception as e:
         emsg = str(e).lower()
-        logger.error("Generation error (engine=%s): %s", engine, str(e)[:300])
+        logger.error("Generation error (openai): %s", str(e)[:300])
         if any(k in emsg for k in ["429", "rate", "overload", "quota", "unavailable", "503", "busy", "capacity", "no credits", "billing"]):
             raise HTTPException(
                 status_code=503,
