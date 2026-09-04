@@ -3,14 +3,14 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import uuid
 import asyncio
 import logging
-import requests
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime, timezone
 
+from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 from catalog import FANCHI_CATALOG, FINISH_INTERPRETATION
 import fanchi_sync
 
@@ -21,8 +21,8 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')  # user's own OpenAI key (server-side only)
-OPENAI_IMAGE_MODEL = os.environ.get('OPENAI_IMAGE_MODEL', 'gpt-6-astra')
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview"  # Nano Banana via Emergent Universal Key
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -72,34 +72,6 @@ Do not redesign the vehicle. Do not change the wheels. Do not change the body ki
 The final image must look like the exact same vehicle in the uploaded photograph after professional FANCHI sticker wrapping installation."""
 
 
-def _openai_edit(prompt: str, img_b64: str):
-    """Edit car photo via OpenAI Responses API + image_generation tool."""
-    body = {
-        "model": OPENAI_IMAGE_MODEL,
-        "input": [{
-            "role": "user",
-            "content": [
-                {"type": "input_text", "text": prompt},
-                {"type": "input_image", "image_url": f"data:image/jpeg;base64,{img_b64}"},
-            ],
-        }],
-        "tools": [{"type": "image_generation", "input_fidelity": "high"}],
-    }
-    r = requests.post(
-        "https://api.openai.com/v1/responses",
-        headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
-        json=body,
-        timeout=180,
-    )
-    if r.status_code != 200:
-        raise RuntimeError(f"{r.status_code} {r.text[:300]}")
-    d = r.json()
-    for out in d.get("output", []):
-        if out.get("type") == "image_generation_call" and out.get("result"):
-            return "image/png", out["result"]
-    return None, None
-
-
 @api_router.get("/")
 async def root():
     return {"message": "FANCHI AI Wrap Studio API"}
@@ -131,7 +103,7 @@ async def catalog_sync():
 
 @api_router.post("/generate-wrap")
 async def generate_wrap(req: GenerateWrapRequest):
-    if not OPENAI_API_KEY:
+    if not EMERGENT_LLM_KEY:
         raise HTTPException(status_code=500, detail={"code": "config", "message": "AI engine is not configured."})
 
     img_b64 = req.image_base64
@@ -141,17 +113,26 @@ async def generate_wrap(req: GenerateWrapRequest):
     prompt = build_prompt(req.product)
 
     try:
-        mime, data = await asyncio.to_thread(_openai_edit, prompt, img_b64)
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"fanchi-{uuid.uuid4()}",
+            system_message="You are a professional automotive vinyl wrap visualizer.",
+        )
+        chat.with_model("gemini", GEMINI_IMAGE_MODEL).with_params(modalities=["image", "text"])
 
-        if not data:
-            logger.warning("OpenAI returned no image.")
+        msg = UserMessage(text=prompt, file_contents=[ImageContent(img_b64)])
+        _text, images = await chat.send_message_multimodal_response(msg)
+
+        if not images:
+            logger.warning("AI engine returned no image.")
             raise HTTPException(
                 status_code=502,
                 detail={"code": "no_image", "message": "Unable to generate your FANCHI wrap visual right now. Please try again."},
             )
 
+        out = images[0]
         return {
-            "image": f"data:{mime};base64,{data}",
+            "image": f"data:{out['mime_type']};base64,{out['data']}",
             "product": req.product.model_dump(),
         }
 
@@ -159,8 +140,8 @@ async def generate_wrap(req: GenerateWrapRequest):
         raise
     except Exception as e:
         emsg = str(e).lower()
-        logger.error("Generation error (openai): %s", str(e)[:300])
-        if any(k in emsg for k in ["429", "rate", "overload", "quota", "unavailable", "503", "busy", "capacity", "no credits", "billing"]):
+        logger.error("Generation error: %s", str(e)[:300])
+        if any(k in emsg for k in ["429", "rate", "overload", "quota", "unavailable", "503", "busy", "capacity", "budget"]):
             raise HTTPException(
                 status_code=503,
                 detail={"code": "busy", "message": "FANCHI AI is currently busy. Please try again in a moment."},
