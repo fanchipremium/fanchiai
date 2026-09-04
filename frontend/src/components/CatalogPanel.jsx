@@ -1,23 +1,19 @@
 import { useState, useMemo } from "react";
 import { Search, Check } from "lucide-react";
-import { MATERIALS, FINISHES, MATERIAL_FULL, titleCase } from "@/lib/constants";
+import { MATERIAL_FULL, titleCase } from "@/lib/constants";
 
 export default function CatalogPanel({ products, seriesMeta = [], selected, onSelect }) {
   const [search, setSearch] = useState("");
-  const [material, setMaterial] = useState("ALL");
-  const [finish, setFinish] = useState("ALL");
   const [series, setSeries] = useState("SEMUA");
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
       const q = search.toLowerCase();
       const matchQ = !q || p.name.toLowerCase().includes(q) || p.color_code.toLowerCase().includes(q) || p.color_name.toLowerCase().includes(q);
-      const matchM = material === "ALL" || p.material === material;
-      const matchF = finish === "ALL" || p.finish === finish;
       const matchS = series === "SEMUA" || p.series === series;
-      return matchQ && matchM && matchF && matchS;
+      return matchQ && matchS;
     });
-  }, [products, search, material, finish, series]);
+  }, [products, search, series]);
 
   return (
     <div>
@@ -35,17 +31,6 @@ export default function CatalogPanel({ products, seriesMeta = [], selected, onSe
           placeholder="Search product, color or code..."
           className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-[var(--accent)]"
         />
-      </div>
-
-      <div data-testid="fanchi-material-filter-tabs" className="mb-2 flex flex-wrap gap-1.5">
-        {MATERIALS.map((m) => (
-          <Chip key={m} active={material === m} onClick={() => setMaterial(m)} label={m} tone="accent" />
-        ))}
-      </div>
-      <div data-testid="fanchi-finish-filter-tabs" className="mb-3 flex flex-wrap gap-1.5">
-        {FINISHES.map((f) => (
-          <Chip key={f} active={finish === f} onClick={() => setFinish(f)} label={f} tone="accent" />
-        ))}
       </div>
 
       <div data-testid="fanchi-series-filter-tabs" className="mb-4 flex flex-wrap gap-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-2.5">

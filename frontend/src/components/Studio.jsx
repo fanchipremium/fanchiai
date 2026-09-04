@@ -138,25 +138,27 @@ export default function Studio() {
             <CatalogPanel products={products} seriesMeta={meta?.series || []} selected={selected} onSelect={setSelected} />
           </div>
 
-          <div>
-            <div className="mb-3 flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] font-mono text-xs font-bold">3</span>
-              <h2 className="font-display text-xl font-bold uppercase tracking-wide">Generate</h2>
+          {consent && (
+            <div>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] font-mono text-xs font-bold">3</span>
+                <h2 className="font-display text-xl font-bold uppercase tracking-wide">Generate</h2>
+              </div>
+              <button
+                data-testid="generate-visual-button"
+                disabled={!canGenerate}
+                onClick={generate}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-6 py-4 font-display text-lg font-black uppercase tracking-widest text-white transition-transform enabled:hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {status === "loading" ? (<><Loader2 size={20} className="spin" /> Generating…</>) : (<><Sparkles size={20} /> Generate Visual</>)}
+              </button>
+              {!canGenerate && status !== "loading" && (
+                <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-widest text-slate-500">
+                  {!preview ? "Upload foto mobil" : !selected ? "Pilih produk FANCHI" : ""}
+                </p>
+              )}
             </div>
-            <button
-              data-testid="generate-visual-button"
-              disabled={!canGenerate}
-              onClick={generate}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-6 py-4 font-display text-lg font-black uppercase tracking-widest text-white transition-transform enabled:hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {status === "loading" ? (<><Loader2 size={20} className="spin" /> Generating…</>) : (<><Sparkles size={20} /> Generate Visual</>)}
-            </button>
-            {!canGenerate && status !== "loading" && (
-              <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-widest text-slate-500">
-                {!preview ? "Upload foto mobil" : !consent ? "Setujui penggunaan foto" : !selected ? "Pilih produk FANCHI" : ""}
-              </p>
-            )}
-          </div>
+          )}
         </div>
 
         <div className="lg:sticky lg:top-24 lg:self-start">

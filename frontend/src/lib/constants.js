@@ -32,5 +32,5 @@ export const fmtDate = (iso) => {
   }
 };
 
-// Ganti dengan nomor WhatsApp FANCHI (format internasional tanpa +, mis. 628123456789)
-export const FANCHI_WA = "6281200000000";
+// Nomor WhatsApp FANCHI (format internasional tanpa +)
+export const FANCHI_WA = "6281388883521";

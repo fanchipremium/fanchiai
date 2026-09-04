@@ -1,4 +1,4 @@
-import { Zap, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 const LOGO = "https://customer-assets-eiarnc6j.emergentagent.net/job_car-wrap-studio-5/artifacts/qkg4r0xj_Logo%20FanFAN%202023.webp";
 
@@ -14,10 +14,6 @@ export default function Header({ onReset }) {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <span className="hidden items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-slate-400 sm:flex">
-            <Zap size={12} className="text-[var(--accent-cyan)]" />
-            Google Gemini
-          </span>
           <button
             data-testid="reset-studio-button"
             onClick={onReset}
