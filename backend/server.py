@@ -89,22 +89,31 @@ async def get_catalog():
     return {"products": FANCHI_CATALOG}
 
 
-def _openai_edit(prompt: str, img_bytes: bytes):
-    """Call OpenAI gpt-image-1 image edit with the user's own key (server-side)."""
+def _openai_edit(prompt: str, img_b64: str):
+    """Edit car photo via OpenAI Responses API + image_generation tool (model from env)."""
+    body = {
+        "model": OPENAI_IMAGE_MODEL,
+        "input": [{
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": prompt},
+                {"type": "input_image", "image_url": f"data:image/jpeg;base64,{img_b64}"},
+            ],
+        }],
+        "tools": [{"type": "image_generation", "input_fidelity": "high"}],
+    }
     r = requests.post(
-        "https://api.openai.com/v1/images/edits",
-        headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-        data={"model": OPENAI_IMAGE_MODEL, "size": "1024x1024", "n": "1"},
-        files={"image": ("car.png", img_bytes, "image/png"), "prompt": (None, prompt)},
+        "https://api.openai.com/v1/responses",
+        headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+        json=body,
         timeout=180,
     )
     if r.status_code != 200:
         raise RuntimeError(f"{r.status_code} {r.text[:300]}")
     d = r.json()
-    item = (d.get("data") or [{}])[0]
-    b64 = item.get("b64_json")
-    if b64:
-        return "image/png", b64
+    for out in d.get("output", []):
+        if out.get("type") == "image_generation_call" and out.get("result"):
+            return "image/png", out["result"]
     return None, None
 
 
@@ -176,8 +185,7 @@ async def generate_wrap(req: GenerateWrapRequest):
 
     try:
         if engine == "openai":
-            img_bytes = base64.b64decode(img_b64)
-            mime, data = await asyncio.to_thread(_openai_edit, prompt, img_bytes)
+            mime, data = await asyncio.to_thread(_openai_edit, prompt, img_b64)
         elif engine == "gemini":
             mime, data = await asyncio.to_thread(_gemini_direct, prompt, img_b64)
         else:
