@@ -4,8 +4,10 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import uuid
+import base64
 import asyncio
 import logging
+import requests
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
@@ -39,6 +41,7 @@ class WrapProduct(BaseModel):
     material: str
     finish: str
     gradient_css: Optional[str] = None
+    swatch_image: Optional[str] = None
 
 
 class GenerateWrapRequest(BaseModel):
@@ -62,6 +65,8 @@ SELECTED FANCHI PRODUCT
 
 MATERIAL / FINISH INTERPRETATION
 {finish_note}
+
+A second reference image (the FANCHI product swatch) may be provided. If present, use it ONLY as a reference for the exact color, material texture, finish and surface behaviour to apply — do not copy its shape or composition; apply that material onto the vehicle in the first image.
 
 Preserve the exact vehicle identity, model, body shape, proportions, body lines, panels, bumpers, hood, fenders, doors, headlights, taillights, grille, wheels, tires, windows, mirrors, interior visibility, camera angle, perspective, position, environment, background, shadows, lighting and composition.
 
@@ -101,6 +106,17 @@ async def catalog_sync():
     return meta
 
 
+def _fetch_image_b64(url: str):
+    """Download an image URL and return raw base64 (or None on failure)."""
+    try:
+        r = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code == 200 and r.content:
+            return base64.b64encode(r.content).decode("utf-8")
+    except Exception as e:
+        logger.warning("swatch fetch failed: %s", str(e)[:120])
+    return None
+
+
 @api_router.post("/generate-wrap")
 async def generate_wrap(req: GenerateWrapRequest):
     if not EMERGENT_LLM_KEY:
@@ -112,6 +128,13 @@ async def generate_wrap(req: GenerateWrapRequest):
 
     prompt = build_prompt(req.product)
 
+    # Primary reference = user's car photo. Optionally add FANCHI swatch as a second reference.
+    file_contents = [ImageContent(img_b64)]
+    if req.product.swatch_image:
+        swatch_b64 = await asyncio.to_thread(_fetch_image_b64, req.product.swatch_image)
+        if swatch_b64:
+            file_contents.append(ImageContent(swatch_b64))
+
     try:
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
@@ -120,7 +143,7 @@ async def generate_wrap(req: GenerateWrapRequest):
         )
         chat.with_model("gemini", GEMINI_IMAGE_MODEL).with_params(modalities=["image", "text"])
 
-        msg = UserMessage(text=prompt, file_contents=[ImageContent(img_b64)])
+        msg = UserMessage(text=prompt, file_contents=file_contents)
         _text, images = await chat.send_message_multimodal_response(msg)
 
         if not images:
