@@ -1,9 +1,10 @@
-import { useRef } from "react";
-import { Upload, X, ImageIcon } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { Upload, X, ImageIcon, Camera } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export default function UploadPanel({ preview, onFile, onRemove, consent, setConsent }) {
   const inputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   const handleFiles = (files) => {
     const file = files?.[0];
@@ -21,26 +22,44 @@ export default function UploadPanel({ preview, onFile, onRemove, consent, setCon
       </div>
 
       {!preview ? (
-        <div
-          data-testid="car-photo-upload-dropzone"
-          onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
-          className="group flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--border-highlight)] bg-[var(--bg-surface)] px-6 py-12 text-center transition-colors hover:border-[var(--accent)]"
-        >
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-slate-400 transition-colors group-hover:text-[var(--accent)]">
-            <Upload size={24} />
-          </div>
-          <p className="font-semibold text-white">Drag & drop your car photo</p>
-          <p className="mt-1 text-sm text-slate-400">or click to browse — JPG / PNG</p>
-          <input
-            ref={inputRef}
-            data-testid="car-photo-file-input"
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => handleFiles(e.target.files)}
-          />
+        <div className="flex flex-col gap-3">
+            <div
+              data-testid="car-photo-upload-dropzone"
+              onClick={() => inputRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
+              className="group flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--border-highlight)] bg-[var(--bg-surface)] px-6 py-12 text-center transition-colors hover:border-[var(--accent)]"
+            >
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-slate-400 transition-colors group-hover:text-[var(--accent)]">
+                <Upload size={24} />
+              </div>
+              <p className="font-semibold text-white">Drag & drop your car photo</p>
+              <p className="mt-1 text-sm text-slate-400">or click to browse — JPG / PNG</p>
+              <input
+                ref={inputRef}
+                data-testid="car-photo-file-input"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleFiles(e.target.files)}
+              />
+            </div>
+            
+            <button 
+                onClick={() => cameraInputRef.current?.click()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-highlight)] bg-[var(--bg-elevated)] px-4 py-3 font-mono text-sm uppercase tracking-widest text-white transition-colors hover:border-[var(--accent)]"
+            >
+                <Camera size={18} />
+                <span>Take Photo</span>
+            </button>
+            <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => handleFiles(e.target.files)}
+            />
         </div>
       ) : (
         <div className="relative overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">

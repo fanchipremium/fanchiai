@@ -8,7 +8,7 @@ import CatalogPanel from "@/components/CatalogPanel";
 import ResultPanel from "@/components/ResultPanel";
 import { fmtDate, FANCHI_WA, MATERIAL_FULL } from "@/lib/constants";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const API = '/api';
 
 export default function Studio() {
   const [products, setProducts] = useState([]);
@@ -46,17 +46,63 @@ export default function Studio() {
 
   const canGenerate = preview && consent && selected && status !== "loading";
 
+  const FINISH_INTERPRETATION = {
+    "GLOSSY": "Must have a high-gloss, highly reflective, mirror-like clear coat surface with sharp, distinct reflections and strong specular highlights.",
+    "MATTE": "Must have a completely flat, non-reflective surface with soft, diffused lighting and no sharp reflections or gloss.",
+    "SATIN": "Must have a semi-gloss, smooth silk-like surface with diffused, blurred reflections and a soft sheen.",
+    "METALLIC": "Must have visible metallic flakes embedded in the paint, sparkling under direct light with a rich, deep color flop.",
+    "COLOR SHIFT": "Must show a chameleon color-shifting effect where the color changes distinctly depending on the viewing angle and lighting.",
+    "CHROME": "Must look like liquid metal with extreme mirror-like reflectivity, showing clear, undistorted reflections of the surrounding environment.",
+    "CANDY": "Must have an incredibly deep, wet-look glossy finish with intense, vibrant, translucent color over a metallic base."
+  };
+
   const generate = useCallback(async () => {
     if (!preview || !consent || !selected) return;
     setStatus("loading");
     setError(null);
     try {
-      const res = await axios.post(`${API}/generate-wrap`, { image_base64: preview, product: selected });
-      setResult(res.data.image);
+      const finishNote = FINISH_INTERPRETATION[selected.finish?.toUpperCase()] || "Visual surface characteristics must follow the selected FANCHI material and finish.";
+      const prompt = `Edit the uploaded vehicle photo to visualize the exact vehicle wrapped with the selected FANCHI automotive wrapping material and color.
+
+SELECTED FANCHI PRODUCT
+- Product: ${selected.name}
+- Color name: ${selected.color_name}
+- Color code: ${selected.color_code}
+- Material: ${selected.material}
+- Finish: ${selected.finish}
+
+MATERIAL / FINISH INTERPRETATION
+${finishNote}
+
+Preserve the exact vehicle identity, model, body shape, proportions, body lines, panels, bumpers, hood, fenders, doors, headlights, taillights, grille, wheels, tires, windows, mirrors, interior visibility, camera angle, perspective, position, environment, background, shadows, lighting and composition.
+
+Only modify the exterior painted body surfaces to represent the selected FANCHI wrapping material and finish. Apply the selected FANCHI color and material realistically across the vehicle body, including realistic reflections, highlights, texture and surface characteristics appropriate to the selected material.
+
+Do not redesign the vehicle. Do not change the wheels. Do not change the body kit. Do not change the background. Do not change the camera angle. Do not add objects. Do not remove objects. Do not alter the vehicle proportions. Do not apply a flat color overlay.
+
+The final image must look like the exact same vehicle in the uploaded photograph after professional FANCHI sticker wrapping installation.`;
+
+      let imgB64 = preview;
+      if (imgB64.includes(',') && imgB64.trim().startsWith('data:')) {
+        imgB64 = imgB64.split(',')[1];
+      }
+
+      if (window.puter && window.puter.ai && window.puter.ai.txt2img) {
+        const image = await window.puter.ai.txt2img(prompt, {
+            model: "gemini-3.1-flash-image-preview",
+            input_image: imgB64,
+            input_image_mime_type: "image/jpeg"
+        });
+        setResult(image.src);
+      } else {
+        throw new Error("Puter SDK not loaded");
+      }
+
       setResultProduct(selected);
       setStatus("done");
     } catch (e) {
-      const detail = e?.response?.data?.detail;
+      console.error(e);
+      const detail = e?.response?.data?.detail || e;
       const msg = detail?.message || "Unable to generate your FANCHI wrap visual right now. Please try again.";
       setError({ code: detail?.code === "busy" ? "busy" : "general", message: msg });
       setStatus("error");
@@ -150,7 +196,7 @@ export default function Studio() {
                 onClick={generate}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-6 py-4 font-display text-lg font-black uppercase tracking-widest text-white transition-transform enabled:hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {status === "loading" ? (<><Loader2 size={20} className="spin" /> Generating…</>) : (<><Sparkles size={20} /> Generate Visual</>)}
+                {status === "loading" ? (<><Loader2 size={20} className="spin" /> Creating your Fanchi wrap visualization...</>) : (<><Sparkles size={20} /> Generate Visual</>)}
               </button>
               {!canGenerate && status !== "loading" && (
                 <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-widest text-slate-500">
