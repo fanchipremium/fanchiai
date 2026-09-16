@@ -18,7 +18,7 @@ export default function UploadPanel({ preview, onFile, onRemove, consent, setCon
     <div>
       <div className="mb-3 flex items-center gap-2">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] font-mono text-xs font-bold">1</span>
-        <h2 className="font-display text-xl font-bold uppercase tracking-wide">Upload Car Photo</h2>
+        <h2 className="font-display text-xl font-bold uppercase tracking-wide">Upload your car photo</h2>
       </div>
 
       {!preview ? (
@@ -33,8 +33,8 @@ export default function UploadPanel({ preview, onFile, onRemove, consent, setCon
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-slate-400 transition-colors group-hover:text-[var(--accent)]">
               <Upload size={22} />
             </div>
-            <p className="font-semibold text-white">photo, drag & drop your car</p>
-            <p className="mt-1 text-sm text-slate-400">or click to browse from gallery — JPG / PNG</p>
+            <p className="font-semibold text-white">Drag & drop your car photo</p>
+            <p className="mt-1 text-sm text-slate-400">or click to browse — JPG / PNG</p>
             <input
               ref={inputRef}
               data-testid="car-photo-file-input"
@@ -45,26 +45,26 @@ export default function UploadPanel({ preview, onFile, onRemove, consent, setCon
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              data-testid="camera-upload-button"
-              onClick={() => cameraInputRef.current?.click()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-highlight)] bg-[var(--bg-elevated)] px-4 py-3 font-mono text-xs font-semibold uppercase tracking-wider text-white transition-all hover:border-[var(--accent)] hover:bg-[var(--bg-surface)] active:scale-[0.99]"
-            >
-              <Camera size={16} className="text-[var(--accent)]" />
-              <span>Gunakan Kamera HP / Take Photo</span>
-            </button>
-            <input
-              ref={cameraInputRef}
-              data-testid="car-camera-file-input"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => handleFiles(e.target.files)}
-            />
-          </div>
+          <button
+            type="button"
+            id="takePhotoButton"
+            data-testid="camera-upload-button"
+            onClick={() => cameraInputRef.current?.click()}
+            className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-[var(--border-highlight)] bg-[var(--bg-elevated)] px-4 py-3.5 font-display text-sm font-bold uppercase tracking-wider text-white transition-all hover:border-[var(--accent)] hover:bg-[var(--bg-surface)] active:scale-[0.99]"
+          >
+            <Camera size={18} className="text-[var(--accent)]" />
+            <span>Take Photo</span>
+          </button>
+          <input
+            id="cameraInput"
+            ref={cameraInputRef}
+            data-testid="car-camera-file-input"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => handleFiles(e.target.files)}
+          />
         </div>
       ) : (
         <div className="relative overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">

@@ -1,6 +1,6 @@
 {
   "name": "FANCHI AI Wrap Studio",
   "description": "Visualize your car professionally wrapped with authentic FANCHI automotive vinyl products.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
