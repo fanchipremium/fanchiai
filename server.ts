@@ -112,34 +112,33 @@ The final image must look like the exact same vehicle in the uploaded photograph
       }
 
       const prompt = buildPrompt(product);
-      const inputArr = [];
+      const parts = [];
       
-      inputArr.push({ type: "image", data: imgB64, mime_type: "image/jpeg" });
+      parts.push({ inlineData: { data: imgB64, mimeType: "image/jpeg" } });
 
       if (product.swatch_image) {
         const swatchB64 = await fetchImageB64(product.swatch_image);
         if (swatchB64) {
-          inputArr.push({ type: "image", data: swatchB64, mime_type: "image/jpeg" });
+          parts.push({ inlineData: { data: swatchB64, mimeType: "image/jpeg" } });
         }
       }
 
-      inputArr.push({ type: "text", text: prompt });
+      parts.push({ text: prompt });
 
       const ai = new GoogleGenAI({ apiKey });
-      const interaction = await ai.interactions.create({
+      const response = await ai.models.generateContent({
         model: 'gemini-3.1-flash-lite-image',
-        input: inputArr,
-        response_modalities: ['image', 'text'],
+        contents: { parts },
       });
 
       let generatedImage = null;
-      for (const step of interaction.steps) {
-        if (step.type === 'model_output') {
-          const imageContent = step.content?.find((c: any) => c.type === 'image');
-          if (imageContent && imageContent.data) {
-            const base64EncodeString = imageContent.data;
-            const mimeType = imageContent.mime_type || 'image/png';
+      if (response.candidates && response.candidates[0].content.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData) {
+            const base64EncodeString = part.inlineData.data;
+            const mimeType = part.inlineData.mimeType || 'image/png';
             generatedImage = `data:${mimeType};base64,${base64EncodeString}`;
+            break;
           }
         }
       }
