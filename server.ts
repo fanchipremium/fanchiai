@@ -163,12 +163,249 @@ The final image must look like the exact same vehicle in the uploaded photograph
     }
   }
 
-  app.post('/api/generate-wrap', async (req, res) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ code: "config", message: "AI engine is not configured." });
+  async function generateWithAiport(prompt: string, imgB64: string, swatchB64?: string | null) {
+    const aiportKey = process.env.AIPORT_API_KEY || "ak_9dd71d16c32498b244125fe8aea62033bd374dcf87e585ae";
+    if (!aiportKey) return null;
+
+    // 1. Check Akool OpenAPI image-to-image (uses ak_ API key)
+    try {
+      console.log("[AIport/Akool] Attempting OpenAPI image-to-image createBySourcePrompt");
+      const akoolRes = await fetch("https://openapi.akool.com/api/open/v4/content/image/createBySourcePrompt", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": aiportKey,
+          "Authorization": `Bearer ${aiportKey}`
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          source_image: `data:image/jpeg;base64,${imgB64}`,
+          image: `data:image/jpeg;base64,${imgB64}`,
+          quality: "standard"
+        }),
+        signal: AbortSignal.timeout(30000)
+      });
+
+      if (akoolRes.ok) {
+        const akoolData: any = await akoolRes.json();
+        const modelId = akoolData?._id || akoolData?.data?._id || akoolData?.data?.id;
+        if (modelId) {
+          // Poll for result
+          for (let i = 0; i < 15; i++) {
+            await new Promise((r) => setTimeout(r, 2000));
+            const pollRes = await fetch(`https://openapi.akool.com/api/open/v3/content/image/infobymodelid?_id=${modelId}`, {
+              headers: {
+                "x-api-key": aiportKey,
+                "Authorization": `Bearer ${aiportKey}`
+              }
+            });
+            if (pollRes.ok) {
+              const pollData: any = await pollRes.json();
+              const imgUrl = pollData?.data?.image_url || pollData?.data?.url || pollData?.image_url;
+              if (imgUrl) {
+                console.log("[AIport/Akool] Successfully retrieved img2img result:", imgUrl);
+                return imgUrl;
+              }
+            }
+          }
+        }
+        if (akoolData?.data?.image_url || akoolData?.image_url) {
+          return akoolData.data?.image_url || akoolData.image_url;
+        }
+      }
+    } catch (akoolErr) {
+      console.warn("[AIport/Akool] OpenAPI attempt notice:", akoolErr);
     }
 
+    // 2. Check AIport API Gateway endpoints
+    const baseUrls = [
+      "https://api.aiport.site/v1",
+      "https://api.aiport.dev/v1",
+      "https://api.aiport.io/v1",
+      "https://aiport.cfd/v1",
+      "https://api.aiport.site",
+      "https://api.aiport.dev"
+    ];
+
+    const models = [
+      "gemini-3.1-flash-image-preview",
+      "gemini-3-pro-image-preview",
+      "black-forest-labs/flux.1-kontext-max",
+      "flux-kontext",
+      "flux-1-kontext",
+      "dall-e-3"
+    ];
+
+    for (const baseUrl of baseUrls) {
+      for (const model of models) {
+        try {
+          console.log(`[AIport] Attempting img2img via ${baseUrl} with model ${model}`);
+          
+          // Multimodal Chat img2img format
+          const messagesContent: any[] = [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imgB64}` } }
+          ];
+
+          if (swatchB64) {
+            messagesContent.push({
+              type: "image_url",
+              image_url: { url: `data:image/jpeg;base64,${swatchB64}` }
+            });
+          }
+
+          const response = await fetch(`${baseUrl}/chat/completions`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${aiportKey}`,
+              "x-api-key": aiportKey
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                {
+                  role: "user",
+                  content: messagesContent
+                }
+              ]
+            }),
+            signal: AbortSignal.timeout(35000)
+          });
+
+          if (response.ok) {
+            const data: any = await response.json();
+            const choice = data?.choices?.[0]?.message?.content;
+            if (choice) {
+              if (choice.startsWith("data:image/") || choice.startsWith("http://") || choice.startsWith("https://")) {
+                return choice;
+              }
+              const match = choice.match(/!\[.*?\]\((https?:\/\/[^\s)]+)\)/) || choice.match(/(https?:\/\/[^\s)]+\.(?:png|jpg|jpeg|webp))/i);
+              if (match) {
+                return match[1];
+              }
+              const b64Match = choice.match(/data:image\/[a-zA-Z]+;base64,[A-Za-z0-9+/=]+/);
+              if (b64Match) {
+                return b64Match[0];
+              }
+            }
+          }
+
+          // Direct img2img / images/edits / images/generations
+          const imgGenResponse = await fetch(`${baseUrl}/images/edits`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${aiportKey}`,
+              "x-api-key": aiportKey
+            },
+            body: JSON.stringify({
+              model,
+              prompt: prompt,
+              image: `data:image/jpeg;base64,${imgB64}`,
+              n: 1,
+              response_format: "b64_json"
+            }),
+            signal: AbortSignal.timeout(35000)
+          });
+
+          if (imgGenResponse.ok) {
+            const imgData: any = await imgGenResponse.json();
+            const first = imgData?.data?.[0];
+            if (first?.b64_json) {
+              return `data:image/png;base64,${first.b64_json}`;
+            }
+            if (first?.url) {
+              return first.url;
+            }
+          }
+        } catch (aiportErr) {
+          // Continue
+        }
+      }
+    }
+    return null;
+  }
+
+  async function generateWithPuterAPI(prompt: string, imgB64: string, swatchB64?: string | null) {
+    const puterToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InYyIn0.eyJ0IjoidCIsInYiOiIyIiwidG9rZW5fdWlkIjoiODUxYjUxODgtNzY0MC00MjU0LTk2YTEtZWM5OTJmMGU3MzE0IiwidXUiOiJrR2p0NGkzalNJMjRpamM2M1R5WnVRPT0iLCJzdSI6IjV1R0kyR21VUVB1bHhkN2dhVWVvTVE9PSIsImFpIjoia0dqdDRpM2pTSTI0aWpjNjNUeVp1UT09IiwiZnVsbF9hY2Nlc3MiOnRydWUsImlhdCI6MTc4OTUyODk2MH0.ulTl_klS-1-Va8qPogHjblwOoNtDVyaNxurJ3sixCmw";
+    
+    const endpoints = [
+      "https://api.puter.com/v2/chat/completions",
+      "https://api.puter.com/v1/chat/completions",
+      "https://api.puter.com/ai/chat"
+    ];
+
+    const models = [
+      "gemini-3.1-flash-image-preview",
+      "gemini-3-pro-image-preview",
+      "black-forest-labs/flux.1-kontext-max",
+      "flux-kontext"
+    ];
+
+    const messagesContent: any[] = [
+      { type: "text", text: prompt },
+      { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imgB64}` } }
+    ];
+
+    if (swatchB64) {
+      messagesContent.push({
+        type: "image_url",
+        image_url: { url: `data:image/jpeg;base64,${swatchB64}` }
+      });
+    }
+
+    for (const endpoint of endpoints) {
+      for (const model of models) {
+        try {
+          console.log(`[Puter Server] Attempting generation via ${endpoint} with ${model}`);
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${puterToken}`
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                {
+                  role: "user",
+                  content: messagesContent
+                }
+              ]
+            }),
+            signal: AbortSignal.timeout(45000)
+          });
+
+          if (res.ok) {
+            const data: any = await res.json();
+            // Check images array
+            const images = data?.message?.images || data?.choices?.[0]?.message?.images || data?.images;
+            if (images && images.length > 0) {
+              const url = images[0]?.image_url?.url || images[0]?.url || images[0];
+              if (url) return url;
+            }
+
+            const content = data?.choices?.[0]?.message?.content || data?.message?.content;
+            if (typeof content === "string") {
+              if (content.startsWith("data:image/") || content.startsWith("http://") || content.startsWith("https://")) {
+                return content;
+              }
+              const match = content.match(/!\[.*?\]\((https?:\/\/[^\s)]+)\)/) || content.match(/(https?:\/\/[^\s)]+\.(?:png|jpg|jpeg|webp))/i);
+              if (match) return match[1];
+              const b64 = content.match(/data:image\/[a-zA-Z]+;base64,[A-Za-z0-9+/=]+/);
+              if (b64) return b64[0];
+            }
+          }
+        } catch (e) {
+          // try next
+        }
+      }
+    }
+    return null;
+  }
+
+  app.post('/api/generate-wrap', async (req, res) => {
     try {
       const { image_base64, product } = req.body;
       let imgB64 = image_base64;
@@ -177,15 +414,51 @@ The final image must look like the exact same vehicle in the uploaded photograph
       }
 
       const prompt = buildPrompt(product);
-      const parts = [];
       
+      let swatchB64 = null;
+      if (product.swatch_image) {
+        swatchB64 = await fetchImageB64(product.swatch_image);
+      }
+
+      // 1. Try Puter API engine first
+      try {
+        const puterImg = await generateWithPuterAPI(prompt, imgB64, swatchB64);
+        if (puterImg) {
+          console.log("[Puter Server] Successfully generated wrap visual using Puter engine");
+          return res.json({
+            image: puterImg,
+            product: product
+          });
+        }
+      } catch (puterError) {
+        console.warn("[Puter Server] Puter engine notice:", puterError);
+      }
+
+      // 2. Try AIport API engine
+      try {
+        const aiportImage = await generateWithAiport(prompt, imgB64, swatchB64);
+        if (aiportImage) {
+          console.log("[AIport] Successfully generated wrap visual using AIport engine");
+          return res.json({
+            image: aiportImage,
+            product: product
+          });
+        }
+      } catch (aiportError) {
+        console.warn("[AIport] AIport engine warning:", aiportError);
+      }
+
+      // 2. Fallback to Gemini AI Studio SDK
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ code: "config", message: "AI engine is not configured." });
+      }
+
+      const parts = [];
       parts.push({ inlineData: { data: imgB64, mimeType: "image/jpeg" } });
 
-      if (product.swatch_image) {
-        const swatchB64 = await fetchImageB64(product.swatch_image);
-        if (swatchB64) {
-          parts.push({ inlineData: { data: swatchB64, mimeType: "image/jpeg" } });
-        }
+      if (swatchB64) {
+        parts.push({ inlineData: { data: swatchB64, mimeType: "image/jpeg" } });
       }
 
       parts.push({ text: prompt });
@@ -202,7 +475,7 @@ The final image must look like the exact same vehicle in the uploaded photograph
 
       for (const model of candidateModels) {
         try {
-          console.log(`Attempting wrap generation with model ${model}`);
+          console.log(`Attempting wrap generation with Gemini model ${model}`);
           const response = await ai.models.generateContent({
             model: model,
             contents: { parts },

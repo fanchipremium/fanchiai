@@ -46,7 +46,7 @@ export default function Studio() {
   useEffect(() => { 
     loadCatalog();
     ensurePuterLoaded().then((p) => {
-      if (p) console.log("Puter.js v2 successfully synchronized");
+      if (p) console.log("Puter.js v2 AI initialized");
     });
   }, [loadCatalog]);
 
@@ -113,39 +113,33 @@ The final image must look like the exact same vehicle in the uploaded photograph
         imgB64 = imgB64.split(',')[1];
       }
 
-      // 1. Try Puter.js v2 visualization engine first
+      // 1. First priority: Puter.js AI engine (gemini-3.1-flash-image-preview)
       try {
-        const puterResult = await generateWrapWithPuter(prompt, imgB64, selected.swatch_image);
-        if (puterResult) {
-          setResult(puterResult);
+        const puterImg = await generateWrapWithPuter(prompt, imgB64, selected.swatch_image);
+        if (puterImg) {
+          setResult(puterImg);
           setResultProduct(selected);
           setStatus("done");
           return;
         }
       } catch (puterErr) {
-        console.warn("Puter engine attempt failed or not available, falling back to server API:", puterErr);
+        console.warn("[Puter AI] Attempt failed or fallback required:", puterErr);
       }
 
       // 2. Fallback to Server API engine
-      try {
-        const res = await axios.post(`${API}/generate-wrap`, {
-          image_base64: imgB64,
-          product: selected
-        }, { timeout: 120000 });
+      const res = await axios.post(`${API}/generate-wrap`, {
+        image_base64: imgB64,
+        product: selected
+      }, { timeout: 120000 });
 
-        if (res.data?.image) {
-          setResult(res.data.image);
-          setResultProduct(selected);
-          setStatus("done");
-          return;
-        }
-      } catch (apiErr) {
-        console.warn("Server API engine error:", apiErr);
-        throw apiErr;
+      if (res.data?.image) {
+        setResult(res.data.image);
+        setResultProduct(selected);
+        setStatus("done");
+        return;
       }
 
-      setResultProduct(selected);
-      setStatus("done");
+      throw new Error("No image returned from generation service");
     } catch (e) {
       console.error(e);
       const detail = e?.response?.data?.detail || e;
