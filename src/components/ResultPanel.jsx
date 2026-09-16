@@ -27,7 +27,7 @@ export default function ResultPanel({ status, original, result, product, error, 
           <div className="relative z-10 flex flex-col items-center">
             <Loader2 size={34} className="spin text-[var(--accent-cyan)]" />
             <p className="mt-4 font-display text-lg font-bold uppercase tracking-wide">Applying FANCHI Wrap</p>
-            <p className="mt-1 font-mono text-xs uppercase tracking-widest text-slate-400">Google Gemini is rendering…</p>
+            <p className="mt-1 font-mono text-xs uppercase tracking-widest text-slate-400">Creating your Fanchi wrap visualization...</p>
           </div>
         </div>
       )}

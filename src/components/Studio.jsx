@@ -7,12 +7,15 @@ import UploadPanel from "@/components/UploadPanel";
 import CatalogPanel from "@/components/CatalogPanel";
 import ResultPanel from "@/components/ResultPanel";
 import { fmtDate, FANCHI_WA, MATERIAL_FULL } from "@/lib/constants";
+import defaultCatalog from "@/data/catalog_data.json";
+import defaultMeta from "@/data/catalog_meta.json";
+import { ensurePuterLoaded, generateWrapWithPuter } from "@/lib/puter";
 
 const API = '/api';
 
 export default function Studio() {
-  const [products, setProducts] = useState([]);
-  const [meta, setMeta] = useState(null);
+  const [products, setProducts] = useState(defaultCatalog || []);
+  const [meta, setMeta] = useState(defaultMeta || null);
   const [syncing, setSyncing] = useState(false);
   const [preview, setPreview] = useState(null);
   const [consent, setConsent] = useState(false);
@@ -23,20 +26,43 @@ export default function Studio() {
   const [error, setError] = useState(null);
 
   const loadCatalog = useCallback(() => {
-    axios.get(`${API}/catalog`).then((r) => setProducts(r.data.products)).catch(() => toast.error("Gagal memuat katalog FANCHI"));
-    axios.get(`${API}/catalog/meta`).then((r) => setMeta(r.data)).catch(() => {});
+    axios.get(`${API}/catalog`)
+      .then((r) => {
+        if (r.data?.products && Array.isArray(r.data.products) && r.data.products.length > 0) {
+          setProducts(r.data.products);
+        }
+      })
+      .catch((err) => {
+        console.warn("Using bundled catalog data", err);
+      });
+
+    axios.get(`${API}/catalog/meta`)
+      .then((r) => {
+        if (r.data) setMeta(r.data);
+      })
+      .catch(() => {});
   }, []);
 
-  useEffect(() => { loadCatalog(); }, [loadCatalog]);
+  useEffect(() => { 
+    loadCatalog();
+    ensurePuterLoaded().then((p) => {
+      if (p) console.log("Puter.js v2 successfully synchronized");
+    });
+  }, [loadCatalog]);
 
   const syncCatalog = async () => {
     setSyncing(true);
     toast.info("Menyinkronkan katalog FANCHI dari fanchi.id…");
     try {
       const r = await axios.post(`${API}/catalog/sync`, {}, { timeout: 180000 });
-      setMeta(r.data);
-      await axios.get(`${API}/catalog`).then((res) => setProducts(res.data.products));
-      toast.success(`Katalog tersinkron · ${r.data.total} produk`);
+      if (r.data) {
+        setMeta(r.data);
+      }
+      const res = await axios.get(`${API}/catalog`);
+      if (res.data?.products) {
+        setProducts(res.data.products);
+      }
+      toast.success(`Katalog tersinkron · ${r.data?.total || products.length} produk`);
     } catch {
       toast.error("Gagal sinkron katalog. Coba lagi.");
     } finally {
@@ -87,15 +113,35 @@ The final image must look like the exact same vehicle in the uploaded photograph
         imgB64 = imgB64.split(',')[1];
       }
 
-      if (window.puter && window.puter.ai && window.puter.ai.txt2img) {
-        const image = await window.puter.ai.txt2img(prompt, {
-            model: "gemini-3.1-flash-image-preview",
-            input_image: imgB64,
-            input_image_mime_type: "image/jpeg"
-        });
-        setResult(image.src);
-      } else {
-        throw new Error("Puter SDK not loaded");
+      // 1. Try Puter.js v2 visualization engine first
+      try {
+        const puterResult = await generateWrapWithPuter(prompt, imgB64, selected.swatch_image);
+        if (puterResult) {
+          setResult(puterResult);
+          setResultProduct(selected);
+          setStatus("done");
+          return;
+        }
+      } catch (puterErr) {
+        console.warn("Puter engine attempt failed or not available, falling back to server API:", puterErr);
+      }
+
+      // 2. Fallback to Server API engine
+      try {
+        const res = await axios.post(`${API}/generate-wrap`, {
+          image_base64: imgB64,
+          product: selected
+        }, { timeout: 120000 });
+
+        if (res.data?.image) {
+          setResult(res.data.image);
+          setResultProduct(selected);
+          setStatus("done");
+          return;
+        }
+      } catch (apiErr) {
+        console.warn("Server API engine error:", apiErr);
+        throw apiErr;
       }
 
       setResultProduct(selected);

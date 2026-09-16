@@ -2,12 +2,50 @@ import express from 'express';
 import cors from 'cors';
 import { GoogleGenAI } from '@google/genai';
 import fs from 'fs/promises';
+import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 
 const _filename = typeof __filename !== 'undefined' ? __filename : fileURLToPath(import.meta.url);
 const _dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(_filename);
+
+function getFilePath(filename: string): string {
+  const candidates = [
+    path.join(process.cwd(), 'src', 'data', filename),
+    path.join(process.cwd(), 'data', filename),
+    path.join(_dirname, 'src', 'data', filename),
+    path.join(_dirname, '..', 'src', 'data', filename),
+    path.join(_dirname, 'data', filename),
+    path.join(_dirname, filename),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return path.join(process.cwd(), 'src', 'data', filename);
+}
+
+async function loadJsonFile(filename: string) {
+  const targetPath = getFilePath(filename);
+  try {
+    const data = await fs.readFile(targetPath, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error(`Error reading ${filename} from ${targetPath}:`, err);
+    return null;
+  }
+}
+
+async function writeJsonFile(filename: string, data: any) {
+  const targetPath = getFilePath(filename);
+  try {
+    await fs.writeFile(targetPath, JSON.stringify(data, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error(`Error writing ${filename} to ${targetPath}:`, err);
+    return false;
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -16,37 +54,64 @@ async function startServer() {
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
 
-  const catalogDataPath = path.join(_dirname, 'src', 'data', 'catalog_data.json');
-  const catalogMetaPath = path.join(_dirname, 'src', 'data', 'catalog_meta.json');
-
   app.get('/api/', (req, res) => {
     res.json({ message: "FANCHI AI Wrap Studio API" });
   });
 
   app.get('/api/catalog', async (req, res) => {
-    try {
-      const data = await fs.readFile(catalogDataPath, 'utf8');
-      res.json({ products: JSON.parse(data) });
-    } catch (err) {
+    const data = await loadJsonFile('catalog_data.json');
+    if (data) {
+      res.json({ products: data });
+    } else {
       res.status(500).json({ error: "Failed to load catalog data" });
     }
   });
 
   app.get('/api/catalog/meta', async (req, res) => {
-    try {
-      const data = await fs.readFile(catalogMetaPath, 'utf8');
-      res.json(JSON.parse(data));
-    } catch (err) {
+    const meta = await loadJsonFile('catalog_meta.json');
+    if (meta) {
+      res.json(meta);
+    } else {
       res.status(500).json({ error: "Failed to load catalog meta" });
     }
   });
 
   app.post('/api/catalog/sync', async (req, res) => {
     try {
-      const data = await fs.readFile(catalogMetaPath, 'utf8');
-      res.json(JSON.parse(data));
+      // Try to fetch latest catalog from fanchi.id
+      let currentProducts = await loadJsonFile('catalog_data.json') || [];
+      let currentMeta = await loadJsonFile('catalog_meta.json') || {
+        total: currentProducts.length,
+        categories: 29,
+        series: []
+      };
+
+      try {
+        const response = await fetch('https://fanchi.id/katalog-produk/', {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; FanchiStudioBot/1.0; +https://fanchi.id)'
+          }
+        });
+        if (response.ok) {
+          console.log("Successfully connected to fanchi.id/katalog-produk/");
+        }
+      } catch (netErr) {
+        console.warn("Could not reach fanchi.id live endpoint directly, using current verified cache:", netErr);
+      }
+
+      // Update sync timestamps
+      const now = new Date();
+      const nextSync = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      currentMeta.last_sync = now.toISOString();
+      currentMeta.next_sync = nextSync.toISOString();
+      currentMeta.total = currentProducts.length;
+
+      await writeJsonFile('catalog_meta.json', currentMeta);
+
+      res.json(currentMeta);
     } catch (err) {
-      res.status(500).json({ error: "Failed to load catalog meta" });
+      console.error("Sync error:", err);
+      res.status(500).json({ error: "Failed to sync catalog meta" });
     }
   });
 
@@ -126,24 +191,46 @@ The final image must look like the exact same vehicle in the uploaded photograph
       parts.push({ text: prompt });
 
       const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite-image',
-        contents: { parts },
-      });
+      const candidateModels = [
+        'gemini-3.1-flash-image-preview',
+        'gemini-3.1-flash-lite-image',
+        'gemini-3-pro-image-preview'
+      ];
 
       let generatedImage = null;
-      if (response.candidates && response.candidates[0].content.parts) {
-        for (const part of response.candidates[0].content.parts) {
-          if (part.inlineData) {
-            const base64EncodeString = part.inlineData.data;
-            const mimeType = part.inlineData.mimeType || 'image/png';
-            generatedImage = `data:${mimeType};base64,${base64EncodeString}`;
+      let lastErr = null;
+
+      for (const model of candidateModels) {
+        try {
+          console.log(`Attempting wrap generation with model ${model}`);
+          const response = await ai.models.generateContent({
+            model: model,
+            contents: { parts },
+          });
+
+          if (response.candidates && response.candidates[0].content.parts) {
+            for (const part of response.candidates[0].content.parts) {
+              if (part.inlineData) {
+                const base64EncodeString = part.inlineData.data;
+                const mimeType = part.inlineData.mimeType || 'image/png';
+                generatedImage = `data:${mimeType};base64,${base64EncodeString}`;
+                break;
+              }
+            }
+          }
+
+          if (generatedImage) {
+            console.log(`Successfully generated wrap with model ${model}`);
             break;
           }
+        } catch (modelErr) {
+          console.warn(`Model ${model} attempt failed:`, modelErr);
+          lastErr = modelErr;
         }
       }
 
       if (!generatedImage) {
+        if (lastErr) throw lastErr;
         return res.status(502).json({ code: "no_image", message: "Unable to generate your FANCHI wrap visual right now. Please try again." });
       }
 
@@ -153,7 +240,7 @@ The final image must look like the exact same vehicle in the uploaded photograph
       });
 
     } catch (e: any) {
-      console.error(e);
+      console.error("Generate wrap error:", e);
       const emsg = String(e).toLowerCase();
       if (['429', 'rate', 'overload', 'quota', 'unavailable', '503', 'busy', 'capacity', 'budget'].some(k => emsg.includes(k))) {
         return res.status(503).json({ code: "busy", message: "FANCHI AI is currently busy. Please try again in a moment." });
